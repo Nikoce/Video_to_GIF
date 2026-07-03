@@ -62,6 +62,34 @@
             <button class="preset-button" type="button" data-preset="small">小体积</button>
           </div>
 
+          <div id="clipSelection" class="clip-panel" style="--clip-start-pct: 0%; --clip-end-pct: 0%;">
+            <div class="clip-header">
+              <div>
+                <h3>片段截选</h3>
+                <span id="clipDurationLabel">选择视频后可拖动截选</span>
+              </div>
+              <span id="clipCurrentTime" class="status-pill">0:00</span>
+            </div>
+            <div class="clip-timeline">
+              <div class="clip-track">
+                <div class="clip-fill"></div>
+              </div>
+              <label class="clip-range-label">
+                <span>开始点</span>
+                <input id="clipStartRange" type="range" min="0" max="0" step="0.1" value="0" disabled />
+              </label>
+              <label class="clip-range-label">
+                <span>结束点</span>
+                <input id="clipEndRange" type="range" min="0" max="0" step="0.1" value="0" disabled />
+              </label>
+            </div>
+            <div class="clip-actions">
+              <button id="markStartButton" class="secondary-button compact-button" type="button" disabled>当前画面设为开始</button>
+              <button id="markEndButton" class="secondary-button compact-button" type="button" disabled>当前画面设为结束</button>
+              <button id="previewClipButton" class="secondary-button compact-button" type="button" disabled>预览截选片段</button>
+            </div>
+          </div>
+
           <div class="form-grid">
             <label>
               <span>开始时间</span>

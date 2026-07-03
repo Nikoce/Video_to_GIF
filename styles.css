@@ -192,7 +192,8 @@ video {
 }
 
 .preset-row,
-.action-row {
+.action-row,
+.clip-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -240,10 +241,81 @@ video {
   color: var(--text);
 }
 
+.compact-button {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
 .primary-button:disabled,
+.secondary-button:disabled,
 .secondary-button.disabled {
   opacity: 0.45;
   pointer-events: none;
+}
+
+.clip-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.clip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.clip-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.clip-header span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.clip-timeline {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.clip-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e4e9ef;
+  overflow: hidden;
+  position: relative;
+}
+
+.clip-fill {
+  position: absolute;
+  inset: 0;
+  left: var(--clip-start-pct);
+  right: calc(100% - var(--clip-end-pct));
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #eab308);
+}
+
+.clip-range-label {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.clip-range-label input {
+  width: 100%;
 }
 
 .form-grid {
@@ -338,6 +410,15 @@ input[type="range"] {
   .media-grid,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .clip-header,
+  .clip-range-label {
+    grid-template-columns: 1fr;
+  }
+
+  .clip-header {
+    flex-direction: column;
   }
 
   .range-row {

@@ -20,6 +20,14 @@
     resultMeta: document.getElementById("resultMeta"),
     resultStage: document.getElementById("resultStage"),
     gifPreview: document.getElementById("gifPreview"),
+    clipSelection: document.getElementById("clipSelection"),
+    clipStartRange: document.getElementById("clipStartRange"),
+    clipEndRange: document.getElementById("clipEndRange"),
+    clipDurationLabel: document.getElementById("clipDurationLabel"),
+    clipCurrentTime: document.getElementById("clipCurrentTime"),
+    markStartButton: document.getElementById("markStartButton"),
+    markEndButton: document.getElementById("markEndButton"),
+    previewClipButton: document.getElementById("previewClipButton"),
     startInput: document.getElementById("startInput"),
     endInput: document.getElementById("endInput"),
     fpsInput: document.getElementById("fpsInput"),
@@ -69,10 +77,18 @@
     });
 
     elements.video.addEventListener("loadedmetadata", onVideoMetadata);
+    elements.video.addEventListener("timeupdate", onVideoTimeUpdate);
     elements.video.addEventListener("error", () => {
       setStatus("这个视频浏览器无法直接读取，建议换 MP4/H.264 再试。", true);
       elements.convertButton.disabled = true;
     });
+    elements.startInput.addEventListener("input", () => setClipValues(Number(elements.startInput.value), Number(elements.endInput.value), "start"));
+    elements.endInput.addEventListener("input", () => setClipValues(Number(elements.startInput.value), Number(elements.endInput.value), "end"));
+    elements.clipStartRange.addEventListener("input", () => setClipValues(Number(elements.clipStartRange.value), Number(elements.endInput.value), "start"));
+    elements.clipEndRange.addEventListener("input", () => setClipValues(Number(elements.startInput.value), Number(elements.clipEndRange.value), "end"));
+    elements.markStartButton.addEventListener("click", markCurrentFrameAsStart);
+    elements.markEndButton.addEventListener("click", markCurrentFrameAsEnd);
+    elements.previewClipButton.addEventListener("click", previewSelectedClip);
     elements.qualityInput.addEventListener("input", updateQualityLabel);
     elements.convertButton.addEventListener("click", convert);
     elements.resetButton.addEventListener("click", reset);
@@ -99,13 +115,110 @@
       return;
     }
 
-    elements.startInput.value = "0";
-    elements.endInput.value = String(Math.min(3, state.duration).toFixed(1));
-    elements.endInput.max = String(state.duration.toFixed(1));
-    elements.startInput.max = String(state.duration.toFixed(1));
+    updateClipControlLimits(state.duration);
+    setClipValues(0, Math.min(3, state.duration), "metadata");
     elements.sourceMeta.textContent = `${formatDuration(state.duration)} · ${formatBytes(state.file.size)}`;
     elements.convertButton.disabled = false;
     setStatus("可以生成 GIF。");
+  }
+
+  function updateClipControlLimits(duration) {
+    const max = Math.max(0, Number(duration || 0)).toFixed(1);
+    [
+      elements.startInput,
+      elements.endInput,
+      elements.clipStartRange,
+      elements.clipEndRange
+    ].forEach((input) => {
+      input.max = max;
+      input.step = "0.1";
+      input.disabled = !duration;
+    });
+    elements.markStartButton.disabled = !duration;
+    elements.markEndButton.disabled = !duration;
+    elements.previewClipButton.disabled = !duration;
+  }
+
+  function setClipValues(rawStart, rawEnd, source = "") {
+    const max = Math.max(0, Number(state.duration || 0));
+    const minGap = max > 0.1 ? 0.1 : max;
+    let start = clampNumber(rawStart, 0, max);
+    let end = clampNumber(rawEnd, 0, max);
+
+    if (max && end <= start) {
+      if (source === "start") {
+        end = Math.min(max, start + minGap);
+        if (end === start) start = Math.max(0, end - minGap);
+      } else {
+        start = Math.max(0, end - minGap);
+        if (end === start) end = Math.min(max, start + minGap);
+      }
+    }
+
+    elements.startInput.value = formatSecondsValue(start);
+    elements.endInput.value = formatSecondsValue(end);
+    elements.clipStartRange.value = String(start);
+    elements.clipEndRange.value = String(end);
+    updateClipSummary(start, end);
+
+    if (source && source !== "metadata" && state.resultUrl) {
+      revokeResult();
+    }
+  }
+
+  function updateClipSummary(start = Number(elements.startInput.value || 0), end = Number(elements.endInput.value || 0)) {
+    const duration = Math.max(0, end - start);
+    elements.clipDurationLabel.textContent = state.duration
+      ? `已选 ${formatDuration(duration)} · ${formatSecondsValue(start)}s - ${formatSecondsValue(end)}s`
+      : "选择视频后可拖动截选";
+    const startPct = state.duration ? (start / state.duration) * 100 : 0;
+    const endPct = state.duration ? (end / state.duration) * 100 : 0;
+    elements.clipSelection.style.setProperty("--clip-start-pct", `${Math.max(0, Math.min(100, startPct))}%`);
+    elements.clipSelection.style.setProperty("--clip-end-pct", `${Math.max(0, Math.min(100, endPct))}%`);
+  }
+
+  function onVideoTimeUpdate() {
+    elements.clipCurrentTime.textContent = formatDuration(elements.video.currentTime || 0);
+    if (!state.previewingClip) return;
+    const end = Number(elements.endInput.value || 0);
+    const start = Number(elements.startInput.value || 0);
+    if (elements.video.currentTime >= end) {
+      state.previewingClip = false;
+      elements.video.pause();
+      elements.video.currentTime = start;
+      setStatus("截选片段预览结束。");
+    }
+  }
+
+  function markCurrentFrameAsStart() {
+    const current = clampNumber(elements.video.currentTime || 0, 0, state.duration);
+    const end = Math.max(Number(elements.endInput.value || 0), current + 0.1);
+    setClipValues(current, Math.min(end, state.duration), "start");
+    setStatus("已把当前画面设为开始点。");
+  }
+
+  function markCurrentFrameAsEnd() {
+    const current = clampNumber(elements.video.currentTime || 0, 0, state.duration);
+    const start = Math.min(Number(elements.startInput.value || 0), current - 0.1);
+    setClipValues(Math.max(0, start), current, "end");
+    setStatus("已把当前画面设为结束点。");
+  }
+
+  async function previewSelectedClip() {
+    const settings = readSettings();
+    if (!settings.valid) {
+      setStatus(settings.message, true);
+      return;
+    }
+    state.previewingClip = true;
+    elements.video.currentTime = settings.start;
+    try {
+      await elements.video.play();
+      setStatus("正在预览截选片段。");
+    } catch {
+      state.previewingClip = false;
+      setStatus("浏览器阻止自动播放，可以手动点击视频播放预览。", true);
+    }
   }
 
   function applyPreset(name) {
@@ -249,6 +362,7 @@
   function reset() {
     state.file = null;
     state.duration = 0;
+    state.previewingClip = false;
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
     state.objectUrl = "";
     revokeResult();
@@ -258,6 +372,8 @@
     elements.sourceMeta.textContent = "未选择";
     elements.resultMeta.textContent = "等待生成";
     elements.convertButton.disabled = true;
+    updateClipControlLimits(0);
+    setClipValues(0, 0, "metadata");
     setProgress(0);
     setStatus("请选择一个视频。");
   }
@@ -296,6 +412,16 @@
     const minutes = Math.floor(seconds / 60);
     const rest = Math.round(seconds % 60).toString().padStart(2, "0");
     return `${minutes}:${rest}`;
+  }
+
+  function formatSecondsValue(seconds) {
+    return (Math.round(Number(seconds || 0) * 10) / 10).toFixed(1);
+  }
+
+  function clampNumber(value, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return min;
+    return Math.max(min, Math.min(max, number));
   }
 
   function buildOutputName(fileName) {
