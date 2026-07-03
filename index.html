@@ -21,7 +21,7 @@
         </header>
 
         <section id="dropZone" class="drop-zone">
-          <input id="fileInput" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v" />
+          <input id="fileInput" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v" multiple />
           <div class="drop-copy">
             <strong>拖入视频</strong>
             <span>支持 MP4、MOV、WEBM、M4V，推荐 3-8 秒片段。</span>
@@ -32,7 +32,7 @@
         <section class="media-grid">
           <div class="preview-panel">
             <div class="panel-header">
-              <h2>视频预览</h2>
+              <h2>当前视频预览</h2>
               <span id="sourceMeta" class="status-pill">未选择</span>
             </div>
             <video id="videoPreview" controls playsinline muted></video>
@@ -48,6 +48,25 @@
               <img id="gifPreview" alt="GIF 预览" hidden />
             </div>
           </div>
+        </section>
+
+        <section id="batchPanel" class="batch-panel hidden">
+          <div class="panel-header">
+            <div>
+              <h2>已选视频预览</h2>
+              <p id="batchSummary">所有待生成视频都会显示在这里。</p>
+            </div>
+            <button id="removeAllButton" class="secondary-button compact-button" type="button">清空全部</button>
+          </div>
+          <div class="batch-toolbar">
+            <span id="selectionSummary">未选择视频</span>
+            <div class="batch-actions">
+              <button id="selectAllButton" class="secondary-button compact-button" type="button">全选</button>
+              <button id="clearSelectionButton" class="secondary-button compact-button" type="button">取消选择</button>
+              <button id="applyClipButton" class="secondary-button compact-button" type="button">应用当前片段到选中</button>
+            </div>
+          </div>
+          <div id="videoGrid" class="video-preview-grid"></div>
         </section>
 
         <section class="control-panel">
@@ -132,8 +151,8 @@
           </div>
 
           <div class="action-row">
-            <button id="convertButton" class="primary-button" type="button" disabled>生成 GIF</button>
-            <a id="downloadLink" class="secondary-button disabled" download="video-to-gif.gif">下载 GIF</a>
+            <button id="convertButton" class="primary-button" type="button" disabled>全部生成 GIF</button>
+            <a id="downloadLink" class="secondary-button disabled" download="video-to-gif.gif">下载当前 GIF</a>
           </div>
 
           <div class="progress-wrap" aria-live="polite">
@@ -142,6 +161,16 @@
             </div>
             <span id="progressLabel">0%</span>
           </div>
+        </section>
+
+        <section class="task-panel">
+          <div class="panel-header">
+            <div>
+              <h2>GIF 任务</h2>
+              <p id="taskSummary">还没有任务。选择视频后即可生成。</p>
+            </div>
+          </div>
+          <div id="taskBody" class="task-body empty">暂无任务</div>
         </section>
       </section>
     </main>

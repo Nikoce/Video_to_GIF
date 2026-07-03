@@ -48,7 +48,9 @@ input {
 .topbar,
 .control-panel,
 .preview-panel,
-.drop-zone {
+.drop-zone,
+.batch-panel,
+.task-panel {
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(223, 228, 234, 0.95);
   box-shadow: var(--shadow);
@@ -141,7 +143,9 @@ h2 {
 }
 
 .preview-panel,
-.control-panel {
+.control-panel,
+.batch-panel,
+.task-panel {
   border-radius: 8px;
   padding: 18px;
 }
@@ -163,6 +167,10 @@ h2 {
   background: #eef1f5;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.hidden {
+  display: none !important;
 }
 
 video,
@@ -189,6 +197,10 @@ video {
   max-width: 100%;
   max-height: 100%;
   display: block;
+}
+
+.result-stage img[hidden] {
+  display: none;
 }
 
 .preset-row,
@@ -378,6 +390,183 @@ video {
   gap: 12px;
 }
 
+.batch-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.batch-panel .panel-header p,
+.task-panel .panel-header p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.video-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.video-preview-tile {
+  position: relative;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.video-preview-tile.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(23, 126, 137, 0.14);
+}
+
+.video-preview-tile.selected {
+  background: var(--accent-soft);
+}
+
+.video-preview-check {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+}
+
+.video-preview-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.video-remove-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #b91c1c;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.video-preview-tile video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.video-preview-caption {
+  overflow: hidden;
+  margin-top: 8px;
+  color: #374151;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-clip-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.task-body {
+  display: grid;
+  gap: 10px;
+}
+
+.task-body.empty {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.task-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -485,5 +674,11 @@ input[type="range"] {
 
   .range-row {
     grid-template-columns: 1fr;
+  }
+
+  .batch-toolbar,
+  .task-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
