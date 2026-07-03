@@ -56,12 +56,6 @@
             <span id="statusText" class="status-text">请选择一个视频。</span>
           </div>
 
-          <div class="preset-row" role="group" aria-label="转换预设">
-            <button class="preset-button active" type="button" data-preset="balanced">均衡</button>
-            <button class="preset-button" type="button" data-preset="clear">更清晰</button>
-            <button class="preset-button" type="button" data-preset="small">小体积</button>
-          </div>
-
           <div id="clipSelection" class="clip-panel" style="--clip-start-pct: 0%; --clip-end-pct: 0%;">
             <div class="clip-header">
               <div>
@@ -100,19 +94,41 @@
               <input id="endInput" type="number" min="0" step="0.1" value="3" />
             </label>
             <label>
-              <span>帧率</span>
+              <span>帧率 FPS</span>
               <input id="fpsInput" type="number" min="4" max="18" step="1" value="10" />
             </label>
             <label>
-              <span>最大宽度</span>
+              <span>画面宽度 px</span>
               <input id="widthInput" type="number" min="160" max="960" step="20" value="480" />
             </label>
           </div>
 
-          <div class="range-row">
-            <label for="qualityInput">画质倾向</label>
-            <input id="qualityInput" type="range" min="1" max="3" step="1" value="2" />
-            <span id="qualityLabel">均衡</span>
+          <div class="compression-panel">
+            <div class="compression-header">
+              <div>
+                <h3>压缩设置</h3>
+                <span id="compressionHint">均衡清晰，适合日常查看。</span>
+              </div>
+              <label>
+                <span>当前方案</span>
+                <select id="compressionMode">
+                  <option value="review-min">复盘极小（1 MB / 360px / 8fps / 96色）</option>
+                  <option value="standard" selected>均衡清晰（8 MB / 720px / 12fps / 192色）</option>
+                  <option value="clear">清晰优先（5 MB / 540px / 12fps / 160色）</option>
+                  <option value="custom">自定义参数</option>
+                </select>
+              </label>
+            </div>
+            <div class="compression-grid">
+              <label>
+                <span>目标大小 MB</span>
+                <input id="targetMbInput" type="number" min="0.2" max="20" step="0.1" value="8" />
+              </label>
+              <label>
+                <span>颜色数量</span>
+                <input id="colorsInput" type="number" min="32" max="256" step="8" value="192" />
+              </label>
+            </div>
           </div>
 
           <div class="action-row">
@@ -130,8 +146,8 @@
       </section>
     </main>
 
-    <canvas id="workCanvas" hidden></canvas>
-    <script src="./gif-encoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

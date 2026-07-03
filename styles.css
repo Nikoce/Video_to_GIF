@@ -318,6 +318,66 @@ video {
   width: 100%;
 }
 
+.compression-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.compression-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 12px;
+  align-items: end;
+}
+
+.compression-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.compression-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.compression-header span,
+.compression-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.compression-header label,
+.compression-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compression-header select,
+.compression-grid input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #fff;
+}
+
+.compression-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -408,7 +468,9 @@ input[type="range"] {
   }
 
   .media-grid,
-  .form-grid {
+  .form-grid,
+  .compression-header,
+  .compression-grid {
     grid-template-columns: 1fr;
   }
 

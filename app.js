@@ -6,8 +6,11 @@
     objectUrl: "",
     resultUrl: "",
     duration: 0,
-    preset: "balanced",
-    busy: false
+    preset: "standard",
+    busy: false,
+    ffmpeg: null,
+    ffmpegReady: false,
+    previewingClip: false
   };
 
   const elements = {
@@ -32,24 +35,48 @@
     endInput: document.getElementById("endInput"),
     fpsInput: document.getElementById("fpsInput"),
     widthInput: document.getElementById("widthInput"),
-    qualityInput: document.getElementById("qualityInput"),
-    qualityLabel: document.getElementById("qualityLabel"),
+    compressionMode: document.getElementById("compressionMode"),
+    compressionHint: document.getElementById("compressionHint"),
+    targetMbInput: document.getElementById("targetMbInput"),
+    colorsInput: document.getElementById("colorsInput"),
     convertButton: document.getElementById("convertButton"),
     downloadLink: document.getElementById("downloadLink"),
     statusText: document.getElementById("statusText"),
     progressBar: document.getElementById("progressBar"),
-    progressLabel: document.getElementById("progressLabel"),
-    canvas: document.getElementById("workCanvas")
+    progressLabel: document.getElementById("progressLabel")
   };
 
   const presets = {
-    balanced: { fps: 10, width: 480, quality: 2, label: "均衡" },
-    clear: { fps: 12, width: 640, quality: 3, label: "更清晰" },
-    small: { fps: 8, width: 360, quality: 1, label: "小体积" }
+    "review-min": {
+      label: "复盘极小",
+      targetMb: 1,
+      width: 360,
+      fps: 8,
+      colors: 96,
+      hint: "尽量压到 1 MB 内，适合群里快速复盘。"
+    },
+    standard: {
+      label: "均衡清晰",
+      targetMb: 8,
+      width: 720,
+      fps: 12,
+      colors: 192,
+      hint: "均衡清晰，适合日常查看。"
+    },
+    clear: {
+      label: "清晰优先",
+      targetMb: 5,
+      width: 540,
+      fps: 12,
+      colors: 160,
+      hint: "优先保持画面观感，适合需要看细节的 GIF。"
+    }
   };
 
+  const ffmpegBaseUrl = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+
   bindEvents();
-  applyPreset("balanced");
+  applyCompressionPreset("standard");
 
   function bindEvents() {
     elements.chooseButton.addEventListener("click", () => elements.fileInput.click());
@@ -72,16 +99,13 @@
       if (file) loadFile(file);
     });
 
-    document.querySelectorAll("[data-preset]").forEach((button) => {
-      button.addEventListener("click", () => applyPreset(button.dataset.preset));
-    });
-
     elements.video.addEventListener("loadedmetadata", onVideoMetadata);
     elements.video.addEventListener("timeupdate", onVideoTimeUpdate);
     elements.video.addEventListener("error", () => {
       setStatus("这个视频浏览器无法直接读取，建议换 MP4/H.264 再试。", true);
       elements.convertButton.disabled = true;
     });
+
     elements.startInput.addEventListener("input", () => setClipValues(Number(elements.startInput.value), Number(elements.endInput.value), "start"));
     elements.endInput.addEventListener("input", () => setClipValues(Number(elements.startInput.value), Number(elements.endInput.value), "end"));
     elements.clipStartRange.addEventListener("input", () => setClipValues(Number(elements.clipStartRange.value), Number(elements.endInput.value), "start"));
@@ -89,7 +113,31 @@
     elements.markStartButton.addEventListener("click", markCurrentFrameAsStart);
     elements.markEndButton.addEventListener("click", markCurrentFrameAsEnd);
     elements.previewClipButton.addEventListener("click", previewSelectedClip);
-    elements.qualityInput.addEventListener("input", updateQualityLabel);
+
+    elements.compressionMode.addEventListener("change", () => {
+      if (presets[elements.compressionMode.value]) {
+        applyCompressionPreset(elements.compressionMode.value);
+      } else {
+        state.preset = "custom";
+        updateCompressionHint();
+      }
+      revokeResult();
+    });
+
+    [elements.targetMbInput, elements.widthInput, elements.fpsInput, elements.colorsInput].forEach((element) => {
+      element.addEventListener("input", () => {
+        state.preset = "custom";
+        elements.compressionMode.value = "custom";
+        normalizeCompressionControls(false);
+        updateCompressionHint();
+        revokeResult();
+      });
+      element.addEventListener("change", () => {
+        normalizeCompressionControls(true);
+        updateCompressionHint();
+      });
+    });
+
     elements.convertButton.addEventListener("click", convert);
     elements.resetButton.addEventListener("click", reset);
   }
@@ -119,6 +167,7 @@
     setClipValues(0, Math.min(3, state.duration), "metadata");
     elements.sourceMeta.textContent = `${formatDuration(state.duration)} · ${formatBytes(state.file.size)}`;
     elements.convertButton.disabled = false;
+    updateCompressionHint();
     setStatus("可以生成 GIF。");
   }
 
@@ -160,6 +209,7 @@
     elements.clipStartRange.value = String(start);
     elements.clipEndRange.value = String(end);
     updateClipSummary(start, end);
+    updateCompressionHint();
 
     if (source && source !== "metadata" && state.resultUrl) {
       revokeResult();
@@ -221,21 +271,31 @@
     }
   }
 
-  function applyPreset(name) {
-    const preset = presets[name] || presets.balanced;
-    state.preset = name;
-    elements.fpsInput.value = String(preset.fps);
+  function applyCompressionPreset(mode) {
+    const preset = presets[mode] || presets.standard;
+    state.preset = mode;
+    elements.compressionMode.value = mode;
+    elements.targetMbInput.value = String(preset.targetMb);
     elements.widthInput.value = String(preset.width);
-    elements.qualityInput.value = String(preset.quality);
-    document.querySelectorAll("[data-preset]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.preset === name);
-    });
-    updateQualityLabel();
+    elements.fpsInput.value = String(preset.fps);
+    elements.colorsInput.value = String(preset.colors);
+    updateCompressionHint();
   }
 
-  function updateQualityLabel() {
-    const labels = { 1: "小体积", 2: "均衡", 3: "更清晰" };
-    elements.qualityLabel.textContent = labels[elements.qualityInput.value] || "均衡";
+  function normalizeCompressionControls(force = true) {
+    if (!force) return;
+    elements.targetMbInput.value = String(clampNumber(elements.targetMbInput.value, 0.2, 20));
+    elements.widthInput.value = String(Math.round(clampNumber(elements.widthInput.value, 1, 1920)));
+    elements.fpsInput.value = String(Math.round(clampNumber(elements.fpsInput.value, 4, 20)));
+    elements.colorsInput.value = String(Math.round(clampNumber(elements.colorsInput.value, 32, 256)));
+  }
+
+  function updateCompressionHint() {
+    const settings = readCompressionSettings();
+    const presetHint = presets[state.preset]?.hint || "按自定义参数压缩，大小和清晰度由当前数值决定。";
+    const duration = Math.max(Number(elements.endInput.value || 0) - Number(elements.startInput.value || 0), 0);
+    const durationHint = duration ? ` 当前片段约 ${duration.toFixed(1)} 秒。` : "";
+    elements.compressionHint.textContent = `${presetHint}${durationHint} 当前参数：${settings.targetMb} MB / ${settings.width}px / ${settings.fps}fps / ${settings.colors}色。`;
   }
 
   async function convert() {
@@ -254,16 +314,24 @@
     setProgress(0);
 
     try {
-      const dimensions = resolveOutputSize(settings.width);
-      const frames = await captureFrames(settings, dimensions);
-      setStatus("正在编码 GIF...");
+      const ffmpeg = await ensureFfmpeg();
+      const inputName = `input${getExtension(state.file.name) || ".mp4"}`;
+      const outputName = "output.gif";
+      await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
+
+      setStatus("正在读取视频...");
+      setProgress(10);
+      await ffmpeg.writeFile(inputName, await window.FFmpegUtil.fetchFile(state.file));
+
+      setStatus("正在用 FFmpeg 生成 GIF...");
+      setProgress(18);
+      const args = buildFfmpegArgs(inputName, outputName, settings);
+      await ffmpeg.exec(args);
+
+      setStatus("正在准备下载...");
       setProgress(92);
-      await waitForPaint();
-      const blob = window.GIFEncoder.encode({
-        width: dimensions.width,
-        height: dimensions.height,
-        frames
-      });
+      const data = await ffmpeg.readFile(outputName);
+      const blob = new Blob([data.buffer], { type: "image/gif" });
       const url = URL.createObjectURL(blob);
       state.resultUrl = url;
       elements.gifPreview.src = url;
@@ -273,8 +341,10 @@
       elements.downloadLink.download = buildOutputName(state.file.name);
       elements.downloadLink.classList.remove("disabled");
       elements.resultMeta.textContent = `${formatBytes(blob.size)}`;
+      const sizeWarning = blob.size > settings.targetBytes ? "，当前仍高于目标大小，可以降低宽度、FPS 或颜色数" : "";
       setProgress(100);
-      setStatus(`完成：${frames.length} 帧，${formatBytes(blob.size)}。`);
+      setStatus(`完成：${formatBytes(blob.size)}${sizeWarning}。`);
+      await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
     } catch (error) {
       setStatus(error.message || "生成失败，请缩短片段或降低宽度后再试。", true);
       elements.resultMeta.textContent = "生成失败";
@@ -284,79 +354,94 @@
     }
   }
 
+  async function ensureFfmpeg() {
+    if (!window.FFmpegWASM?.FFmpeg || !window.FFmpegUtil?.toBlobURL) {
+      throw new Error("FFmpeg 组件没有加载成功，请刷新页面后再试。");
+    }
+
+    if (state.ffmpegReady && state.ffmpeg) return state.ffmpeg;
+
+    setStatus("首次使用正在加载 FFmpeg 组件...");
+    setProgress(4);
+    const ffmpeg = new window.FFmpegWASM.FFmpeg();
+    ffmpeg.on("progress", ({ progress }) => {
+      if (!state.busy) return;
+      const percent = 18 + Math.round(Math.max(0, Math.min(1, progress || 0)) * 70);
+      setProgress(percent);
+    });
+    ffmpeg.on("log", ({ message }) => {
+      if (/error/i.test(message || "")) {
+        console.debug(message);
+      }
+    });
+
+    const { toBlobURL } = window.FFmpegUtil;
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${ffmpegBaseUrl}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${ffmpegBaseUrl}/ffmpeg-core.wasm`, "application/wasm")
+    });
+    state.ffmpeg = ffmpeg;
+    state.ffmpegReady = true;
+    return ffmpeg;
+  }
+
+  function buildFfmpegArgs(inputName, outputName, settings) {
+    const filter = [
+      `fps=${settings.fps}`,
+      `scale=w='min(${settings.width},iw)':h=-2:flags=lanczos`,
+      `split[s0][s1];[s0]palettegen=max_colors=${settings.colors}[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3`
+    ].join(",");
+
+    return [
+      "-y",
+      "-ss", String(settings.start),
+      "-t", String(settings.end - settings.start),
+      "-i", inputName,
+      "-filter_complex", filter,
+      "-loop", "0",
+      outputName
+    ];
+  }
+
+  async function cleanupFfmpegFiles(ffmpeg, fileNames) {
+    await Promise.all(fileNames.map(async (fileName) => {
+      try {
+        await ffmpeg.deleteFile(fileName);
+      } catch {
+        // The file may not exist yet.
+      }
+    }));
+  }
+
   function readSettings() {
+    const compression = readCompressionSettings();
     const start = Number(elements.startInput.value || 0);
     const end = Number(elements.endInput.value || 0);
-    const fps = Math.max(4, Math.min(18, Math.round(Number(elements.fpsInput.value || 10))));
-    const width = Math.max(160, Math.min(960, Math.round(Number(elements.widthInput.value || 480))));
-    const quality = Math.max(1, Math.min(3, Math.round(Number(elements.qualityInput.value || 2))));
 
     if (!state.duration) return { valid: false, message: "请先选择视频。" };
     if (end <= start) return { valid: false, message: "结束时间需要大于开始时间。" };
     if (start < 0 || end > state.duration + 0.05) return { valid: false, message: "截取时间不能超出视频时长。" };
-    if ((end - start) * fps > 160) return { valid: false, message: "当前片段帧数太多，请缩短时长或降低帧率。" };
-    return { valid: true, start, end, fps, width, quality };
+    if ((end - start) * compression.fps > 260) return { valid: false, message: "当前片段帧数太多，请缩短时长或降低 FPS。" };
+    return {
+      valid: true,
+      start,
+      end,
+      ...compression
+    };
   }
 
-  function resolveOutputSize(maxWidth) {
-    const videoWidth = elements.video.videoWidth || 640;
-    const videoHeight = elements.video.videoHeight || 360;
-    const width = Math.min(maxWidth, videoWidth);
-    const height = Math.max(2, Math.round((width / videoWidth) * videoHeight / 2) * 2);
-    return { width, height };
-  }
-
-  async function captureFrames(settings, dimensions) {
-    const frameCount = Math.max(1, Math.ceil((settings.end - settings.start) * settings.fps));
-    const delayCs = Math.max(2, Math.round(100 / settings.fps));
-    const context = elements.canvas.getContext("2d", { willReadFrequently: true });
-    elements.canvas.width = dimensions.width;
-    elements.canvas.height = dimensions.height;
-
-    const frames = [];
-    for (let index = 0; index < frameCount; index += 1) {
-      const time = Math.min(settings.end - 0.02, settings.start + index / settings.fps);
-      setStatus(`正在抽帧 ${index + 1}/${frameCount}...`);
-      setProgress(Math.round((index / frameCount) * 88));
-      await seekVideo(time);
-      context.drawImage(elements.video, 0, 0, dimensions.width, dimensions.height);
-      const image = context.getImageData(0, 0, dimensions.width, dimensions.height);
-      frames.push({
-        delayCs,
-        indices: window.GIFEncoder.quantizeRgbaTo332(image.data, settings.quality)
-      });
-      await waitForPaint();
-    }
-    return frames;
-  }
-
-  function seekVideo(time) {
-    return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        cleanup();
-        reject(new Error("读取视频帧超时，请换 MP4 或缩短片段。"));
-      }, 6000);
-
-      function onSeeked() {
-        cleanup();
-        resolve();
-      }
-
-      function onError() {
-        cleanup();
-        reject(new Error("读取视频帧失败，请换 MP4/H.264 再试。"));
-      }
-
-      function cleanup() {
-        window.clearTimeout(timeout);
-        elements.video.removeEventListener("seeked", onSeeked);
-        elements.video.removeEventListener("error", onError);
-      }
-
-      elements.video.addEventListener("seeked", onSeeked, { once: true });
-      elements.video.addEventListener("error", onError, { once: true });
-      elements.video.currentTime = time;
-    });
+  function readCompressionSettings() {
+    const targetMb = clampNumber(elements.targetMbInput.value, 0.2, 20);
+    const width = Math.max(1, Math.round(clampNumber(elements.widthInput.value, 1, 1920)));
+    const fps = Math.round(clampNumber(elements.fpsInput.value, 4, 20));
+    const colors = Math.round(clampNumber(elements.colorsInput.value, 32, 256));
+    return {
+      targetMb,
+      targetBytes: targetMb * 1024 * 1024,
+      width,
+      fps,
+      colors
+    };
   }
 
   function reset() {
@@ -398,10 +483,6 @@
     elements.progressLabel.textContent = `${progress}%`;
   }
 
-  function waitForPaint() {
-    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-  }
-
   function formatBytes(bytes) {
     if (!bytes) return "0 MB";
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -409,8 +490,9 @@
   }
 
   function formatDuration(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const rest = Math.round(seconds % 60).toString().padStart(2, "0");
+    const totalSeconds = Math.max(0, Math.round(Number(seconds || 0)));
+    const minutes = Math.floor(totalSeconds / 60);
+    const rest = String(totalSeconds % 60).padStart(2, "0");
     return `${minutes}:${rest}`;
   }
 
@@ -422,6 +504,11 @@
     const number = Number(value);
     if (!Number.isFinite(number)) return min;
     return Math.max(min, Math.min(max, number));
+  }
+
+  function getExtension(fileName) {
+    const match = String(fileName || "").match(/\.[^.]+$/);
+    return match ? match[0].toLowerCase() : "";
   }
 
   function buildOutputName(fileName) {
