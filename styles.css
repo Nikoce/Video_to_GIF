@@ -293,6 +293,34 @@ video {
   font-size: 13px;
 }
 
+.clip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.clip-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.clip-panel:not(.clip-enabled) .clip-timeline,
+.clip-panel:not(.clip-enabled) .clip-actions,
+.clip-panel:not(.clip-enabled) + .form-grid label:nth-child(-n + 2) {
+  opacity: 0.45;
+}
+
 .clip-timeline {
   display: grid;
   gap: 12px;

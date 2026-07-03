@@ -32,6 +32,7 @@
     clearSelectionButton: document.getElementById("clearSelectionButton"),
     applyClipButton: document.getElementById("applyClipButton"),
     clipSelection: document.getElementById("clipSelection"),
+    clipToggle: document.getElementById("clipToggle"),
     clipStartRange: document.getElementById("clipStartRange"),
     clipEndRange: document.getElementById("clipEndRange"),
     clipDurationLabel: document.getElementById("clipDurationLabel"),
@@ -133,6 +134,19 @@
     });
     elements.applyClipButton.addEventListener("click", applyActiveClipToSelected);
 
+    elements.clipToggle.addEventListener("change", () => {
+      const active = getActiveVideo();
+      if (!active?.duration) return;
+      active.clip.useClip = elements.clipToggle.checked;
+      if (!active.clip.end) {
+        active.clip.end = Math.min(5, active.duration);
+      }
+      setClipControls(active.clip.start, active.clip.end || active.duration, active.duration);
+      updateCompressionHint();
+      renderVideoGrid();
+      updateControls();
+      clearResultPreview();
+    });
     elements.startInput.addEventListener("input", () => setActiveClip(Number(elements.startInput.value), Number(elements.endInput.value), "start"));
     elements.endInput.addEventListener("input", () => setActiveClip(Number(elements.startInput.value), Number(elements.endInput.value), "end"));
     elements.clipStartRange.addEventListener("input", () => setActiveClip(Number(elements.clipStartRange.value), Number(elements.endInput.value), "start"));
@@ -209,8 +223,8 @@
       if (Number.isFinite(item.duration) && item.duration > 0 && !item.clip.end) {
         item.clip = {
           start: 0,
-          end: Math.min(3, item.duration),
-          useClip: true
+          end: Math.min(5, item.duration),
+          useClip: false
         };
       }
       if (item.id === state.activeId) {
@@ -268,8 +282,8 @@
     if (!active.clip.end) {
       active.clip = {
         start: 0,
-        end: Math.min(3, active.duration),
-        useClip: true
+        end: Math.min(5, active.duration),
+        useClip: false
       };
     }
     updateClipControlLimits(active.duration);
@@ -283,21 +297,24 @@
 
   function updateClipControlLimits(duration) {
     const max = Math.max(0, Number(duration || 0)).toFixed(1);
+    const active = getActiveVideo();
+    const clipEnabled = Boolean(active?.clip.useClip);
     [elements.startInput, elements.endInput, elements.clipStartRange, elements.clipEndRange].forEach((input) => {
       input.max = max;
       input.step = "0.1";
-      input.disabled = !duration || state.busy;
+      input.disabled = !duration || state.busy || !clipEnabled;
     });
-    elements.markStartButton.disabled = !duration || state.busy;
-    elements.markEndButton.disabled = !duration || state.busy;
-    elements.previewClipButton.disabled = !duration || state.busy;
+    elements.markStartButton.disabled = !duration || state.busy || !clipEnabled;
+    elements.markEndButton.disabled = !duration || state.busy || !clipEnabled;
+    elements.previewClipButton.disabled = !duration || state.busy || !clipEnabled;
+    elements.clipToggle.disabled = !duration || state.busy;
   }
 
   function setActiveClip(rawStart, rawEnd, source = "") {
     const active = getActiveVideo();
     if (!active?.duration) return;
     const values = normalizeClip(rawStart, rawEnd, active.duration, source);
-    active.clip = { ...active.clip, ...values, useClip: values.end < active.duration || values.start > 0 };
+    active.clip = { ...active.clip, ...values, useClip: true };
     setClipControls(values.start, values.end, active.duration);
     updateCompressionHint();
     renderVideoGrid();
@@ -327,13 +344,34 @@
     elements.clipStartRange.value = String(start);
     elements.clipEndRange.value = String(end);
     const selectedDuration = Math.max(0, end - start);
+    const active = getActiveVideo();
+    const useClip = Boolean(active?.clip.useClip);
+    elements.clipToggle.checked = useClip;
+    elements.clipSelection.classList.toggle("clip-enabled", useClip);
     elements.clipDurationLabel.textContent = duration
-      ? `已选 ${formatDuration(selectedDuration)} · ${formatSecondsValue(start)}s - ${formatSecondsValue(end)}s`
-      : "选择视频后可拖动截选";
-    const startPct = duration ? (start / duration) * 100 : 0;
-    const endPct = duration ? (end / duration) * 100 : 0;
+      ? useClip
+        ? `截取 ${formatDuration(selectedDuration)} · ${formatSecondsValue(start)}s - ${formatSecondsValue(end)}s`
+        : `默认整段转 GIF · ${formatDuration(duration)}`
+      : "选择视频后默认整段转 GIF";
+    const startPct = duration && useClip ? (start / duration) * 100 : 0;
+    const endPct = duration && useClip ? (end / duration) * 100 : duration ? 100 : 0;
     elements.clipSelection.style.setProperty("--clip-start-pct", `${Math.max(0, Math.min(100, startPct))}%`);
     elements.clipSelection.style.setProperty("--clip-end-pct", `${Math.max(0, Math.min(100, endPct))}%`);
+  }
+
+  function getEffectiveClip(item) {
+    if (!item?.duration) return { start: 0, end: 0, useClip: false };
+    if (!item.clip?.useClip) return { start: 0, end: item.duration, useClip: false };
+    const values = normalizeClip(item.clip.start, item.clip.end || item.duration, item.duration, "end");
+    return { ...values, useClip: true };
+  }
+
+  function formatClipSummary(item) {
+    if (!item.duration) return "等待读取";
+    const clip = getEffectiveClip(item);
+    return clip.useClip
+      ? `截取 ${formatSecondsValue(clip.start)}-${formatSecondsValue(clip.end)} 秒`
+      : "整段";
   }
 
   function onVideoTimeUpdate() {
@@ -341,6 +379,7 @@
     if (!state.previewingClip) return;
     const active = getActiveVideo();
     if (!active) return;
+    if (!active.clip.useClip) return;
     if (elements.video.currentTime >= active.clip.end) {
       state.previewingClip = false;
       elements.video.pause();
@@ -386,11 +425,15 @@
     if (!active?.duration || !state.selectedIds.size) return;
     for (const item of state.videos) {
       if (!state.selectedIds.has(item.id) || !item.duration) continue;
-      item.clip = clipToDuration(active.clip.start, active.clip.end, item.duration);
+      item.clip = active.clip.useClip
+        ? clipToDuration(active.clip.start, active.clip.end, item.duration)
+        : { start: 0, end: Math.min(5, item.duration), useClip: false };
     }
     renderVideoGrid();
     updateCompressionHint();
-    setStatus(`已把当前截选时间套用到 ${state.selectedIds.size} 个选中视频。`);
+    setStatus(active.clip.useClip
+      ? `已把当前截选时间套用到 ${state.selectedIds.size} 个选中视频。`
+      : `已把“整段转 GIF”套用到 ${state.selectedIds.size} 个选中视频。`);
   }
 
   function clipToDuration(rawStart, rawEnd, duration) {
@@ -429,8 +472,9 @@
     const settings = readCompressionSettings();
     const presetHint = presets[state.preset]?.hint || "按自定义参数压缩，大小和清晰度由当前数值决定。";
     const active = getActiveVideo();
-    const duration = active ? Math.max((active.clip.end || active.duration) - active.clip.start, 0) : 0;
-    const durationHint = duration ? ` 当前片段约 ${duration.toFixed(1)} 秒。` : "";
+    const clip = active ? getEffectiveClip(active) : null;
+    const duration = clip ? Math.max(clip.end - clip.start, 0) : 0;
+    const durationHint = duration ? ` 当前${clip.useClip ? "片段" : "整段"}约 ${duration.toFixed(1)} 秒。` : "";
     elements.compressionHint.textContent = `${presetHint}${durationHint} 当前参数：${settings.targetMb} MB / ${settings.width}px / ${settings.fps}fps / ${settings.colors}色。`;
   }
 
@@ -552,8 +596,9 @@
 
   function readSettingsForItem(item) {
     const compression = readCompressionSettings();
-    const start = Number(item.clip.start || 0);
-    const end = Number(item.clip.end || item.duration || 0);
+    const clip = getEffectiveClip(item);
+    const start = Number(clip.start || 0);
+    const end = Number(clip.end || item.duration || 0);
     if (!item.duration) return { valid: false, message: "请先等视频读取完成。" };
     if (end <= start) return { valid: false, message: "结束时间需要大于开始时间。" };
     if (start < 0 || end > item.duration + 0.05) return { valid: false, message: "截取时间不能超出视频时长。" };
@@ -612,19 +657,17 @@
   function renderVideoGrid() {
     elements.batchPanel.classList.toggle("hidden", !state.videos.length);
     elements.batchSummary.textContent = state.videos.length
-      ? `已选择 ${state.videos.length} 个视频，勾选后可批量套用同一片段，点击卡片可单独微调。当前压缩：${getCompressionLabel()}。`
+      ? `已选择 ${state.videos.length} 个视频，勾选后可批量套用整段/截取设置，点击卡片可单独微调。当前压缩：${getCompressionLabel()}。`
       : "所有待生成视频都会显示在这里。";
     elements.selectionSummary.textContent = state.selectedIds.size
       ? `已选 ${state.selectedIds.size}/${state.videos.length} 个视频`
       : "未选择视频";
     elements.videoGrid.innerHTML = state.videos.map((item) => {
       const selected = state.selectedIds.has(item.id);
-      const clipText = item.duration
-        ? `截取 ${formatSecondsValue(item.clip.start)}-${formatSecondsValue(item.clip.end || item.duration)} 秒`
-        : "等待读取";
+      const clipText = formatClipSummary(item);
       return `
         <article class="video-preview-tile ${item.id === state.activeId ? "active" : ""} ${selected ? "selected" : ""}" data-id="${escapeHtml(item.id)}">
-          <label class="video-preview-check" title="选择这个视频用于批量套用片段">
+          <label class="video-preview-check" title="选择这个视频用于批量套用当前设置">
             <input class="video-preview-select" data-id="${escapeHtml(item.id)}" type="checkbox" ${selected ? "checked" : ""} ${state.busy ? "disabled" : ""} />
             <span>选中</span>
           </label>

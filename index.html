@@ -24,7 +24,7 @@
           <input id="fileInput" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v" multiple />
           <div class="drop-copy">
             <strong>拖入视频</strong>
-            <span>支持 MP4、MOV、WEBM、M4V，推荐 3-8 秒片段。</span>
+            <span>支持 MP4、MOV、WEBM、M4V；默认整段转 GIF，也可以截取 3-8 秒片段。</span>
           </div>
           <button id="chooseButton" class="primary-button" type="button">选择视频</button>
         </section>
@@ -63,7 +63,7 @@
             <div class="batch-actions">
               <button id="selectAllButton" class="secondary-button compact-button" type="button">全选</button>
               <button id="clearSelectionButton" class="secondary-button compact-button" type="button">取消选择</button>
-              <button id="applyClipButton" class="secondary-button compact-button" type="button">应用当前片段到选中</button>
+              <button id="applyClipButton" class="secondary-button compact-button" type="button">应用当前设置到选中</button>
             </div>
           </div>
           <div id="videoGrid" class="video-preview-grid"></div>
@@ -79,8 +79,12 @@
             <div class="clip-header">
               <div>
                 <h3>片段截选</h3>
-                <span id="clipDurationLabel">选择视频后可拖动截选</span>
+                <span id="clipDurationLabel">选择视频后默认整段转 GIF</span>
               </div>
+              <label class="clip-toggle">
+                <input id="clipToggle" type="checkbox" />
+                <span>截取片段</span>
+              </label>
               <span id="clipCurrentTime" class="status-pill">0:00</span>
             </div>
             <div class="clip-timeline">
