@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>视频转 GIF</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>视频转 GIF</h1>
+            <p>本地浏览器处理，素材不会上传服务器。</p>
+          </div>
+          <button id="resetButton" class="icon-button" type="button" title="重置">
+            <span aria-hidden="true">↺</span>
+            <span class="sr-only">重置</span>
+          </button>
+        </header>
+
+        <section id="dropZone" class="drop-zone">
+          <input id="fileInput" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v" />
+          <div class="drop-copy">
+            <strong>拖入视频</strong>
+            <span>支持 MP4、MOV、WEBM、M4V，推荐 3-8 秒片段。</span>
+          </div>
+          <button id="chooseButton" class="primary-button" type="button">选择视频</button>
+        </section>
+
+        <section class="media-grid">
+          <div class="preview-panel">
+            <div class="panel-header">
+              <h2>视频预览</h2>
+              <span id="sourceMeta" class="status-pill">未选择</span>
+            </div>
+            <video id="videoPreview" controls playsinline muted></video>
+          </div>
+
+          <div class="preview-panel">
+            <div class="panel-header">
+              <h2>GIF 结果</h2>
+              <span id="resultMeta" class="status-pill">等待生成</span>
+            </div>
+            <div id="resultStage" class="result-stage">
+              <span>生成后在这里预览</span>
+              <img id="gifPreview" alt="GIF 预览" hidden />
+            </div>
+          </div>
+        </section>
+
+        <section class="control-panel">
+          <div class="panel-header">
+            <h2>转换设置</h2>
+            <span id="statusText" class="status-text">请选择一个视频。</span>
+          </div>
+
+          <div class="preset-row" role="group" aria-label="转换预设">
+            <button class="preset-button active" type="button" data-preset="balanced">均衡</button>
+            <button class="preset-button" type="button" data-preset="clear">更清晰</button>
+            <button class="preset-button" type="button" data-preset="small">小体积</button>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>开始时间</span>
+              <input id="startInput" type="number" min="0" step="0.1" value="0" />
+            </label>
+            <label>
+              <span>结束时间</span>
+              <input id="endInput" type="number" min="0" step="0.1" value="3" />
+            </label>
+            <label>
+              <span>帧率</span>
+              <input id="fpsInput" type="number" min="4" max="18" step="1" value="10" />
+            </label>
+            <label>
+              <span>最大宽度</span>
+              <input id="widthInput" type="number" min="160" max="960" step="20" value="480" />
+            </label>
+          </div>
+
+          <div class="range-row">
+            <label for="qualityInput">画质倾向</label>
+            <input id="qualityInput" type="range" min="1" max="3" step="1" value="2" />
+            <span id="qualityLabel">均衡</span>
+          </div>
+
+          <div class="action-row">
+            <button id="convertButton" class="primary-button" type="button" disabled>生成 GIF</button>
+            <a id="downloadLink" class="secondary-button disabled" download="video-to-gif.gif">下载 GIF</a>
+          </div>
+
+          <div class="progress-wrap" aria-live="polite">
+            <div class="progress-track">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <span id="progressLabel">0%</span>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <canvas id="workCanvas" hidden></canvas>
+    <script src="./gif-encoder.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
