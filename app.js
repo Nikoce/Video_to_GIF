@@ -496,12 +496,20 @@
       setProgress(100);
       setStatus(`完成：${queue.length} 个视频已处理。`);
     } catch (error) {
-      setStatus(error.message || "生成失败，请刷新页面后再试。", true);
+      setStatus(normalizeErrorMessage(error), true);
     } finally {
       state.busy = false;
       updateControls();
       renderVideoGrid();
     }
+  }
+
+  function normalizeErrorMessage(error) {
+    const message = String(error?.message || error || "");
+    if (/Worker|cannot be accessed|SecurityError|cross-origin|cross origin/i.test(message)) {
+      return "FFmpeg 组件被浏览器安全策略拦截，请刷新页面后重试；如果仍失败，请确认正在使用最新版链接。";
+    }
+    return message || "生成失败，请刷新页面后再试。";
   }
 
   async function convertOne(ffmpeg, item, index, total) {
