@@ -180,6 +180,27 @@
       </section>
     </main>
 
+    <div id="previewModal" class="modal-backdrop" hidden>
+      <section class="preview-modal" role="dialog" aria-modal="true" aria-labelledby="previewModalTitle">
+        <header class="preview-modal-header">
+          <div>
+            <h2 id="previewModalTitle">GIF 预览</h2>
+            <p id="previewModalMeta">等待生成</p>
+          </div>
+          <button id="previewModalCloseButton" class="icon-button" type="button" title="关闭预览">
+            <span aria-hidden="true">×</span>
+            <span class="sr-only">关闭预览</span>
+          </button>
+        </header>
+        <div id="previewModalStage" class="preview-modal-stage">
+          <img id="previewModalImage" alt="GIF 预览" />
+        </div>
+        <div class="preview-modal-actions">
+          <a id="previewModalDownloadLink" class="secondary-button compact-button" download="video-to-gif.gif">下载 GIF</a>
+        </div>
+      </section>
+    </div>
+
     <script src="./vendor/ffmpeg/ffmpeg.js"></script>
     <script src="./vendor/ffmpeg/ffmpeg-util.js"></script>
     <script src="./app.js"></script>

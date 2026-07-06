@@ -10,7 +10,8 @@
     busy: false,
     ffmpeg: null,
     ffmpegReady: false,
-    previewingClip: false
+    previewingClip: false,
+    previewModalItemId: ""
   };
 
   const elements = {
@@ -52,6 +53,13 @@
     downloadLink: document.getElementById("downloadLink"),
     taskSummary: document.getElementById("taskSummary"),
     taskBody: document.getElementById("taskBody"),
+    previewModal: document.getElementById("previewModal"),
+    previewModalTitle: document.getElementById("previewModalTitle"),
+    previewModalMeta: document.getElementById("previewModalMeta"),
+    previewModalStage: document.getElementById("previewModalStage"),
+    previewModalImage: document.getElementById("previewModalImage"),
+    previewModalDownloadLink: document.getElementById("previewModalDownloadLink"),
+    previewModalCloseButton: document.getElementById("previewModalCloseButton"),
     statusText: document.getElementById("statusText"),
     progressBar: document.getElementById("progressBar"),
     progressLabel: document.getElementById("progressLabel")
@@ -181,6 +189,18 @@
 
     elements.convertButton.addEventListener("click", convertAll);
     elements.resetButton.addEventListener("click", reset);
+    elements.previewModalCloseButton.addEventListener("click", closeResultModal);
+    elements.previewModal.addEventListener("click", (event) => {
+      if (event.target === elements.previewModal) closeResultModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !elements.previewModal.hidden) closeResultModal();
+    });
+    window.addEventListener("resize", () => {
+      if (elements.previewModal.hidden || !state.previewModalItemId) return;
+      const item = state.videos.find((video) => video.id === state.previewModalItemId);
+      if (item) applyPreviewModalSize(item);
+    });
   }
 
   function addFiles(files) {
@@ -720,7 +740,7 @@
     elements.taskBody.querySelectorAll("[data-preview-result]").forEach((button) => {
       button.addEventListener("click", () => {
         const item = state.videos.find((video) => video.id === button.dataset.previewResult);
-        if (item) showResultPreview(item);
+        if (item) openResultModal(item);
       });
     });
   }
@@ -757,6 +777,59 @@
     elements.resultMeta.textContent = "等待生成";
     elements.downloadLink.removeAttribute("href");
     elements.downloadLink.classList.add("disabled");
+    closeResultModal();
+  }
+
+  function openResultModal(item) {
+    if (!item?.resultUrl) return;
+    const width = Number(item.width || 0);
+    const height = Number(item.height || 0);
+
+    state.previewModalItemId = item.id;
+    elements.previewModalTitle.textContent = buildOutputName(item.file.name);
+    elements.previewModalMeta.textContent = [
+      item.resultSize ? formatBytes(item.resultSize) : "已生成",
+      width && height ? `${width} x ${height}` : ""
+    ].filter(Boolean).join(" · ");
+    applyPreviewModalSize(item);
+    elements.previewModalImage.src = item.resultUrl;
+    elements.previewModalDownloadLink.href = item.resultUrl;
+    elements.previewModalDownloadLink.download = buildOutputName(item.file.name);
+    document.body.classList.add("modal-open");
+    elements.previewModal.hidden = false;
+    elements.previewModalCloseButton.focus({ preventScroll: true });
+  }
+
+  function applyPreviewModalSize(item) {
+    const sourceWidth = Number(item?.width || 0);
+    const sourceHeight = Number(item?.height || 0);
+    const ratioWidth = sourceWidth > 0 ? sourceWidth : 16;
+    const ratioHeight = sourceHeight > 0 ? sourceHeight : 9;
+    const ratio = ratioWidth / ratioHeight;
+    const maxWidth = Math.min(900, Math.max(280, window.innerWidth * 0.88));
+    const maxHeight = Math.min(720, Math.max(220, window.innerHeight * 0.68));
+    let stageWidth = maxWidth;
+    let stageHeight = stageWidth / ratio;
+
+    if (stageHeight > maxHeight) {
+      stageHeight = maxHeight;
+      stageWidth = stageHeight * ratio;
+    }
+
+    elements.previewModalStage.style.aspectRatio = `${ratioWidth} / ${ratioHeight}`;
+    elements.previewModalStage.style.width = `${Math.round(stageWidth)}px`;
+    elements.previewModalStage.style.height = `${Math.round(stageHeight)}px`;
+  }
+
+  function closeResultModal() {
+    state.previewModalItemId = "";
+    document.body.classList.remove("modal-open");
+    elements.previewModal.hidden = true;
+    elements.previewModalImage.removeAttribute("src");
+    elements.previewModalStage.style.removeProperty("aspect-ratio");
+    elements.previewModalStage.style.removeProperty("width");
+    elements.previewModalStage.style.removeProperty("height");
+    elements.previewModalDownloadLink.removeAttribute("href");
   }
 
   function reset() {
