@@ -93,6 +93,9 @@
   };
 
   const ffmpegBaseUrl = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+  const maxGifFrames = 260;
+  const minAutoFps = 4;
+  const defaultClipSeconds = 5;
 
   bindEvents();
   applyCompressionPreset("standard");
@@ -241,11 +244,7 @@
       item.width = Number(probe.videoWidth || 0);
       item.height = Number(probe.videoHeight || 0);
       if (Number.isFinite(item.duration) && item.duration > 0 && !item.clip.end) {
-        item.clip = {
-          start: 0,
-          end: Math.min(5, item.duration),
-          useClip: false
-        };
+        setInitialClip(item);
       }
       if (item.id === state.activeId) {
         elements.sourceMeta.textContent = `${formatDuration(item.duration)} · ${formatBytes(item.file.size)}`;
@@ -299,20 +298,30 @@
       elements.convertButton.disabled = true;
       return;
     }
-    if (!active.clip.end) {
-      active.clip = {
-        start: 0,
-        end: Math.min(5, active.duration),
-        useClip: false
-      };
-    }
+    if (!active.clip.end) setInitialClip(active);
     updateClipControlLimits(active.duration);
     setClipControls(active.clip.start, active.clip.end, active.duration);
     elements.sourceMeta.textContent = `${formatDuration(active.duration)} · ${formatBytes(active.file.size)}`;
     updateCompressionHint();
     renderVideoGrid();
     updateControls();
-    setStatus("可以生成 GIF。");
+    setStatus(active.clip.useClip && active.message.includes("默认截取") ? active.message : "可以生成 GIF。", active.clip.useClip);
+  }
+
+  function setInitialClip(item) {
+    const settings = readCompressionSettings();
+    const wholeVideoPlan = planFrameBudget(item.duration, settings.fps);
+    const useDefaultClip = !wholeVideoPlan.valid;
+    const clipEnd = Math.min(defaultClipSeconds, item.duration);
+    item.clip = {
+      start: 0,
+      end: clipEnd,
+      useClip: useDefaultClip
+    };
+    if (useDefaultClip) {
+      item.message = `视频约 ${formatDuration(item.duration)}，整段太长，已默认截取前 ${formatSecondsValue(clipEnd)} 秒；可以在上方拖动片段后再生成。`;
+    }
+    return useDefaultClip;
   }
 
   function updateClipControlLimits(duration) {
@@ -495,7 +504,13 @@
     const clip = active ? getEffectiveClip(active) : null;
     const duration = clip ? Math.max(clip.end - clip.start, 0) : 0;
     const durationHint = duration ? ` 当前${clip.useClip ? "片段" : "整段"}约 ${duration.toFixed(1)} 秒。` : "";
-    elements.compressionHint.textContent = `${presetHint}${durationHint} 当前参数：${settings.targetMb} MB / ${settings.width}px / ${settings.fps}fps / ${settings.colors}色。`;
+    const framePlan = duration ? planFrameBudget(duration, settings.fps) : null;
+    const frameHint = framePlan?.adjusted
+      ? ` 片段较长，生成时会自动降到 ${framePlan.fps}fps。`
+      : framePlan && !framePlan.valid
+        ? ` 片段太长，建议先截取 ${Math.floor(framePlan.maxDurationAtMinFps)} 秒以内。`
+        : "";
+    elements.compressionHint.textContent = `${presetHint}${durationHint}${frameHint} 当前参数：${settings.targetMb} MB / ${settings.width}px / ${settings.fps}fps / ${settings.colors}色。`;
   }
 
   async function convertAll() {
@@ -537,6 +552,7 @@
     if (!settings.valid) {
       item.status = "failed";
       item.message = settings.message;
+      setStatus(settings.message, true);
       return;
     }
 
@@ -545,7 +561,7 @@
     await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
 
     item.status = "running";
-    item.message = `正在处理 ${index + 1}/${total}...`;
+    item.message = `正在处理 ${index + 1}/${total}...${settings.autoFpsAdjusted ? ` 已自动降到 ${settings.fps}fps。` : ""}`;
     renderTasks();
     setStatus(item.message);
     setProgress(Math.round((index / total) * 100));
@@ -559,9 +575,10 @@
       item.resultUrl = URL.createObjectURL(blob);
       item.resultSize = blob.size;
       item.status = blob.size > settings.targetBytes ? "qualityRisk" : "passed";
+      const fpsNote = settings.autoFpsAdjusted ? `，已自动从 ${settings.originalFps}fps 降到 ${settings.fps}fps` : "";
       item.message = blob.size > settings.targetBytes
-        ? `GIF 已生成，当前 ${formatBytes(blob.size)}，高于目标大小。`
-        : `GIF 已生成，当前 ${formatBytes(blob.size)}。`;
+        ? `GIF 已生成，当前 ${formatBytes(blob.size)}${fpsNote}，高于目标大小。`
+        : `GIF 已生成，当前 ${formatBytes(blob.size)}${fpsNote}。`;
       showResultPreview(item);
       await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
     } catch (error) {
@@ -627,11 +644,26 @@
     const clip = getEffectiveClip(item);
     const start = Number(clip.start || 0);
     const end = Number(clip.end || item.duration || 0);
+    const duration = Math.max(0, end - start);
     if (!item.duration) return { valid: false, message: "请先等视频读取完成。" };
     if (end <= start) return { valid: false, message: "结束时间需要大于开始时间。" };
     if (start < 0 || end > item.duration + 0.05) return { valid: false, message: "截取时间不能超出视频时长。" };
-    if ((end - start) * compression.fps > 260) return { valid: false, message: "当前片段帧数太多，请缩短时长或降低 FPS。" };
-    return { valid: true, start, end, ...compression };
+    const framePlan = planFrameBudget(duration, compression.fps);
+    if (!framePlan.valid) {
+      return {
+        valid: false,
+        message: `这段约 ${formatDuration(duration)}，即使用 ${minAutoFps}fps 也太长；请打开“截取片段”，建议选 3-8 秒。`
+      };
+    }
+    return {
+      valid: true,
+      start,
+      end,
+      ...compression,
+      fps: framePlan.fps,
+      originalFps: compression.fps,
+      autoFpsAdjusted: framePlan.adjusted
+    };
   }
 
   function readCompressionSettings() {
@@ -640,6 +672,31 @@
     const fps = Math.round(clampNumber(elements.fpsInput.value, 4, 20));
     const colors = Math.round(clampNumber(elements.colorsInput.value, 32, 256));
     return { targetMb, targetBytes: targetMb * 1024 * 1024, width, fps, colors };
+  }
+
+  function planFrameBudget(duration, fps) {
+    const seconds = Math.max(0, Number(duration || 0));
+    const requestedFps = Math.max(1, Math.round(Number(fps || 0)));
+    const estimatedFrames = seconds * requestedFps;
+    if (!seconds || estimatedFrames <= maxGifFrames) {
+      return { valid: true, fps: requestedFps, adjusted: false, estimatedFrames };
+    }
+    const adjustedFps = Math.floor(maxGifFrames / seconds);
+    if (adjustedFps >= minAutoFps && adjustedFps < requestedFps) {
+      return {
+        valid: true,
+        fps: adjustedFps,
+        adjusted: true,
+        estimatedFrames: seconds * adjustedFps
+      };
+    }
+    return {
+      valid: false,
+      fps: requestedFps,
+      adjusted: false,
+      estimatedFrames,
+      maxDurationAtMinFps: maxGifFrames / minAutoFps
+    };
   }
 
   function handleVideoGridClick(event) {
